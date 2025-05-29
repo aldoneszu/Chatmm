@@ -14,109 +14,84 @@
       height: 100vh;
       overflow: hidden;
     }
-
     .chat-container {
       display: flex;
       flex-direction: column;
       height: 100vh;
-      background: #1e1e1e;
     }
-
     .chat-header {
-      padding: 15px;
-      background: #0d47a1;
+      background: #1976d2;
       color: white;
+      padding: 15px;
       font-size: 18px;
       display: flex;
-      flex-direction: column;
-      align-items: flex-start;
+      justify-content: space-between;
+      align-items: center;
     }
-
-    .chat-header span:last-child {
-      font-size: 14px;
-      opacity: 0.8;
-      margin-top: 4px;
-    }
-
     .chat-box {
       flex: 1;
-      padding: 10px 15px;
+      padding: 15px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
       scroll-behavior: smooth;
     }
-
     .chat-input {
       display: flex;
       padding: 10px;
-      background: #2c2c2c;
       border-top: 1px solid #444;
+      background: #1e1e1e;
+      position: sticky;
+      bottom: 0;
+      z-index: 10;
     }
-
     .chat-input input {
       flex: 1;
       padding: 10px;
-      border-radius: 20px;
+      font-size: 16px;
+      border-radius: 8px;
       border: none;
       outline: none;
-      background: #424242;
+      background: #333;
       color: white;
-      font-size: 16px;
     }
-
     .chat-input button {
       margin-right: 10px;
       padding: 10px 20px;
       background: #1976d2;
       color: white;
       border: none;
-      border-radius: 20px;
+      border-radius: 8px;
       cursor: pointer;
     }
-
     .msg {
       max-width: 75%;
       margin-bottom: 10px;
       display: flex;
       flex-direction: column;
-      position: relative;
     }
-
     .mine {
       align-self: flex-start;
     }
-
     .other {
       align-self: flex-end;
     }
-
     .bubble {
       padding: 10px 15px;
       border-radius: 20px;
+      background: #37474f;
+      color: white;
       word-wrap: break-word;
       font-size: 16px;
-      position: relative;
     }
-
-    .mine .bubble {
-      background: #1565c0;
-      color: white;
-      border-bottom-left-radius: 0;
-    }
-
     .other .bubble {
-      background: #4caf50;
-      color: white;
-      border-bottom-right-radius: 0;
+      background: #5c4033;
     }
-
     .status {
       font-size: 12px;
-      color: #ccc;
-      margin-top: 3px;
+      color: gray;
+      margin-top: 5px;
     }
-
     img {
       max-width: 200px;
       border-radius: 10px;
@@ -129,21 +104,23 @@
 <body>
   <div class="chat-container">
     <div class="chat-header">
-      <span id="header-title">محادثة</span>
-      <span id="online-status">جارٍ التحميل...</span>
+      <span>محادثة</span>
+      <span id="header-status">جاري التحميل...</span>
     </div>
     <div class="chat-box" id="chat-box"></div>
-    <div class="chat-input" id="chat-input">
-      <input type="text" id="message" placeholder="اكتب رسالتك هنا..." onkeydown="if(event.key==='Enter')sendMessage()"/>
-      <button id="send-btn" onclick="sendMessage()">إرسال</button>
+    <div class="chat-input">
+      <input type="text" id="message" placeholder="اكتب رسالتك هنا..." />
+      <button onclick="sendMessage()">إرسال</button>
     </div>
   </div>
+  <input type="file" id="imageInput" accept="image/*" style="display: none" onchange="sendImage()" />
 
   <script>
-    const currentUser = "mahmoud"; // غير الاسم هنا
+    const currentUser = "mahmoud"; // غيّر الاسم حسب الطرف الحالي
     const otherUser = currentUser === "mahmoud" ? "salma" : "mahmoud";
     const chatPath = "starko/chat";
     const msgInput = document.getElementById("message");
+    const chatBox = document.getElementById("chat-box");
 
     const firebaseConfig = {
       apiKey: "AIzaSyCuP6VscPxkQS5D5z7bCYWXijzaYCdbF2s",
@@ -159,8 +136,7 @@
 
     function sendMessage() {
       const text = msgInput.value.trim();
-      if (text === "") return;
-
+      if (!text) return;
       const messageData = {
         sender: currentUser,
         text,
@@ -168,25 +144,50 @@
         seen: false,
         type: "text"
       };
-
       database.ref(chatPath).push(messageData);
       msgInput.value = "";
       updateTyping(false);
       updateLastSeen();
     }
 
+    function sendImage() {
+      const file = document.getElementById("imageInput").files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const messageData = {
+          sender: currentUser,
+          image: e.target.result,
+          timestamp: Date.now(),
+          seen: false,
+          type: "image"
+        };
+        database.ref(chatPath).push(messageData);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function uploadImage() {
+      document.getElementById("imageInput").click();
+    }
+
     database.ref(chatPath).on("child_added", (snapshot) => {
       const msg = snapshot.val();
       const msgKey = snapshot.key;
-
       const wrapper = document.createElement("div");
       wrapper.className = msg.sender === currentUser ? "msg mine" : "msg other";
-      wrapper.setAttribute("data-id", msgKey);
+      wrapper.dataset.key = msgKey;
 
-      const bubble = document.createElement("div");
-      bubble.className = "bubble";
-      bubble.textContent = msg.text;
-      wrapper.appendChild(bubble);
+      if (msg.type === "text") {
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        bubble.textContent = msg.text;
+        wrapper.appendChild(bubble);
+      } else if (msg.type === "image") {
+        const img = document.createElement("img");
+        img.src = msg.image;
+        wrapper.appendChild(img);
+      }
 
       const status = document.createElement("div");
       status.className = "status";
@@ -195,17 +196,19 @@
       } else {
         markAsSeen(msgKey);
       }
-
       wrapper.appendChild(status);
-      wrapper.addEventListener("contextmenu", (e) => {
-        e.preventDefault();
-        if (msg.sender === currentUser && confirm("هل تريد حذف هذه الرسالة؟")) {
-          database.ref(`${chatPath}/${msgKey}`).remove();
-          wrapper.remove();
-        }
-      });
 
-      document.getElementById("chat-box").appendChild(wrapper);
+      if (msg.sender === currentUser) {
+        wrapper.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          if (confirm("هل تريد حذف هذه الرسالة؟")) {
+            database.ref(`${chatPath}/${msgKey}`).remove();
+            wrapper.remove();
+          }
+        });
+      }
+
+      chatBox.appendChild(wrapper);
       scrollToBottom();
     });
 
@@ -214,13 +217,20 @@
     }
 
     function scrollToBottom() {
-      const chatBox = document.getElementById("chat-box");
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
     msgInput.addEventListener("input", () => {
-      const typing = msgInput.value.trim().length > 0;
-      updateTyping(typing);
+      updateTyping(msgInput.value.trim().length > 0);
+    });
+
+    msgInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+
+    document.querySelector("button").addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      uploadImage();
     });
 
     function updateTyping(isTyping) {
@@ -231,16 +241,17 @@
       database.ref(`starko/lastSeen/${currentUser}`).set(Date.now());
     }
 
-    setInterval(updateLastSeen, 15000);
+    setInterval(updateLastSeen, 30000);
 
     database.ref(`starko/lastSeen/${otherUser}`).on("value", (snapshot) => {
       const time = snapshot.val();
-      const status = document.getElementById("online-status");
-      const diff = Date.now() - time;
-      if (diff < 30000) {
+      const status = document.getElementById("header-status");
+      if (!time) return status.textContent = "";
+      const now = Date.now();
+      if (now - time < 60000) {
         status.textContent = "متصل الآن";
       } else {
-        status.textContent = `آخر ظهور: ${timeAgo(new Date(time))}`;
+        status.textContent = "آخر ظهور: " + timeAgo(new Date(time));
       }
     });
 
@@ -252,8 +263,6 @@
       if (diff < 86400) return `${Math.floor(diff / 3600)} ساعة`;
       return `${Math.floor(diff / 86400)} يوم`;
     }
-
-    window.onload = scrollToBottom;
   </script>
 </body>
 </html>
