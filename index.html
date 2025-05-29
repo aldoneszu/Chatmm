@@ -3,114 +3,120 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>محادثة خاصة</title>
+  <title>محادثة</title>
   <style>
     body {
       margin: 0;
       font-family: "Cairo", sans-serif;
-      background: #f2f2f2;
-      direction: rtl;
-      transition: background 0.3s, color 0.3s;
-    }
-    body.dark {
       background: #121212;
       color: #f0f0f0;
-    }
-    .chat-container {
-      max-width: 600px;
-      margin: auto;
+      direction: rtl;
       height: 100vh;
+      overflow: hidden;
+    }
+
+    .chat-container {
       display: flex;
       flex-direction: column;
-      background: white;
-      position: relative;
-    }
-    body.dark .chat-container {
+      height: 100vh;
       background: #1e1e1e;
     }
+
     .chat-header {
       padding: 15px;
-      background: #1976d2;
+      background: #0d47a1;
       color: white;
       font-size: 18px;
       display: flex;
-      justify-content: space-between;
-      align-items: center;
+      flex-direction: column;
+      align-items: flex-start;
     }
+
+    .chat-header span:last-child {
+      font-size: 14px;
+      opacity: 0.8;
+      margin-top: 4px;
+    }
+
     .chat-box {
       flex: 1;
-      padding: 15px;
+      padding: 10px 15px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
       scroll-behavior: smooth;
     }
+
     .chat-input {
       display: flex;
       padding: 10px;
-      border-top: 1px solid #ccc;
-      background: #fff;
-      position: sticky;
-      bottom: 0;
-      z-index: 2;
-      transition: border 0.3s;
-    }
-    body.dark .chat-input {
       background: #2c2c2c;
+      border-top: 1px solid #444;
     }
-    .chat-input.typing {
-      border-top: 3px solid #4caf50;
-    }
+
     .chat-input input {
       flex: 1;
       padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
+      border-radius: 20px;
+      border: none;
+      outline: none;
+      background: #424242;
+      color: white;
       font-size: 16px;
     }
+
     .chat-input button {
       margin-right: 10px;
       padding: 10px 20px;
       background: #1976d2;
       color: white;
       border: none;
-      border-radius: 8px;
+      border-radius: 20px;
       cursor: pointer;
     }
+
     .msg {
       max-width: 75%;
       margin-bottom: 10px;
       display: flex;
       flex-direction: column;
+      position: relative;
     }
+
     .mine {
       align-self: flex-start;
     }
+
     .other {
       align-self: flex-end;
     }
+
     .bubble {
       padding: 10px 15px;
       border-radius: 20px;
-      background: #d1e7ff;
       word-wrap: break-word;
       font-size: 16px;
+      position: relative;
     }
+
+    .mine .bubble {
+      background: #1565c0;
+      color: white;
+      border-bottom-left-radius: 0;
+    }
+
     .other .bubble {
-      background: #f8d7da;
+      background: #4caf50;
+      color: white;
+      border-bottom-right-radius: 0;
     }
+
     .status {
       font-size: 12px;
-      color: gray;
-      margin-top: 5px;
+      color: #ccc;
+      margin-top: 3px;
     }
-    body.dark .bubble {
-      background: #37474f;
-      color: white;
-    }
-    body.dark .other .bubble {
-      background: #5c4033;
-    }
+
     img {
       max-width: 200px;
       border-radius: 10px;
@@ -124,11 +130,7 @@
   <div class="chat-container">
     <div class="chat-header">
       <span id="header-title">محادثة</span>
-      <div>
-        <span id="typing-status" style="margin-left: 10px; font-size: 14px;"></span>
-        <button onclick="clearChat()">🗑️</button>
-        <button id="toggle-theme">🌙</button>
-      </div>
+      <span id="online-status">جارٍ التحميل...</span>
     </div>
     <div class="chat-box" id="chat-box"></div>
     <div class="chat-input" id="chat-input">
@@ -136,7 +138,7 @@
       <button id="send-btn" onclick="sendMessage()">إرسال</button>
     </div>
   </div>
-  <input type="file" id="imageInput" accept="image/*" style="display: none" onchange="sendImage()" />
+
   <script>
     const currentUser = "mahmoud"; // غير الاسم هنا
     const otherUser = currentUser === "mahmoud" ? "salma" : "mahmoud";
@@ -173,50 +175,18 @@
       updateLastSeen();
     }
 
-    function sendImage() {
-      const file = document.getElementById("imageInput").files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function (e) {
-        const messageData = {
-          sender: currentUser,
-          image: e.target.result,
-          timestamp: Date.now(),
-          seen: false,
-          type: "image"
-        };
-        database.ref(chatPath).push(messageData);
-      };
-      reader.readAsDataURL(file);
-    }
-
-    function uploadImage() {
-      document.getElementById("imageInput").click();
-    }
-
-    function clearChat() {
-      if (confirm("هل أنت متأكد من حذف جميع الرسائل؟")) {
-        database.ref(chatPath).remove();
-      }
-    }
-
     database.ref(chatPath).on("child_added", (snapshot) => {
       const msg = snapshot.val();
       const msgKey = snapshot.key;
 
       const wrapper = document.createElement("div");
       wrapper.className = msg.sender === currentUser ? "msg mine" : "msg other";
+      wrapper.setAttribute("data-id", msgKey);
 
-      if (msg.type === "text") {
-        const bubble = document.createElement("div");
-        bubble.className = "bubble";
-        bubble.textContent = msg.text;
-        wrapper.appendChild(bubble);
-      } else if (msg.type === "image") {
-        const img = document.createElement("img");
-        img.src = msg.image;
-        wrapper.appendChild(img);
-      }
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = msg.text;
+      wrapper.appendChild(bubble);
 
       const status = document.createElement("div");
       status.className = "status";
@@ -227,6 +197,14 @@
       }
 
       wrapper.appendChild(status);
+      wrapper.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        if (msg.sender === currentUser && confirm("هل تريد حذف هذه الرسالة؟")) {
+          database.ref(`${chatPath}/${msgKey}`).remove();
+          wrapper.remove();
+        }
+      });
+
       document.getElementById("chat-box").appendChild(wrapper);
       scrollToBottom();
     });
@@ -243,40 +221,26 @@
     msgInput.addEventListener("input", () => {
       const typing = msgInput.value.trim().length > 0;
       updateTyping(typing);
-      document.getElementById("chat-input").classList.toggle("typing", typing);
     });
 
     function updateTyping(isTyping) {
       database.ref(`starko/typing/${currentUser}`).set(isTyping);
     }
 
-    database.ref(`starko/typing/${otherUser}`).on("value", (snapshot) => {
-      const typing = snapshot.val();
-      const status = document.getElementById("typing-status");
-      status.textContent = typing ? "يكتب الآن..." : "";
-    });
-
-    document.getElementById("toggle-theme").onclick = () => {
-      document.body.classList.toggle("dark");
-    };
-
-    msgInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") sendMessage();
-    });
-
-    document.getElementById("send-btn").addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      uploadImage();
-    });
-
     function updateLastSeen() {
       database.ref(`starko/lastSeen/${currentUser}`).set(Date.now());
     }
 
+    setInterval(updateLastSeen, 15000);
+
     database.ref(`starko/lastSeen/${otherUser}`).on("value", (snapshot) => {
       const time = snapshot.val();
-      if (time) {
-        document.getElementById("header-title").textContent = `آخر ظهور: ${timeAgo(new Date(time))}`;
+      const status = document.getElementById("online-status");
+      const diff = Date.now() - time;
+      if (diff < 30000) {
+        status.textContent = "متصل الآن";
+      } else {
+        status.textContent = `آخر ظهور: ${timeAgo(new Date(time))}`;
       }
     });
 
@@ -288,6 +252,8 @@
       if (diff < 86400) return `${Math.floor(diff / 3600)} ساعة`;
       return `${Math.floor(diff / 86400)} يوم`;
     }
+
+    window.onload = scrollToBottom;
   </script>
 </body>
 </html>
