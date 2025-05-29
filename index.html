@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>محادثة</title>
+  <title>محادثة واتساب</title>
   <style>
     body {
       margin: 0;
       font-family: "Cairo", sans-serif;
-      background: #121212;
+      background: var(--bg-color, #121212);
       color: #f0f0f0;
       direction: rtl;
       height: 100vh;
@@ -41,9 +41,6 @@
       padding: 10px;
       border-top: 1px solid #444;
       background: #1e1e1e;
-      position: sticky;
-      bottom: 0;
-      z-index: 10;
     }
     .chat-input input {
       flex: 1;
@@ -79,27 +76,39 @@
     .bubble {
       padding: 10px 15px;
       border-radius: 20px;
-      background: #37474f;
+      background: #2196f3;
       color: white;
       word-wrap: break-word;
       font-size: 16px;
     }
     .other .bubble {
-      background: #5c4033;
+      background: #555;
     }
     .status {
       font-size: 12px;
       color: gray;
       margin-top: 5px;
     }
+    .time {
+      font-size: 10px;
+      color: #ccc;
+      margin-top: 5px;
+    }
     img {
       max-width: 200px;
       border-radius: 10px;
       margin-top: 5px;
+      cursor: pointer;
+    }
+    audio {
+      margin-top: 5px;
+    }
+    .background-picker {
+      padding: 5px 15px;
+      background: #222;
+      text-align: center;
     }
   </style>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body>
   <div class="chat-container">
@@ -107,16 +116,24 @@
       <span>محادثة</span>
       <span id="header-status">جاري التحميل...</span>
     </div>
+    <div class="background-picker">
+      تغيير الخلفية: <input type="color" id="bgColorPicker" />
+    </div>
     <div class="chat-box" id="chat-box"></div>
     <div class="chat-input">
       <input type="text" id="message" placeholder="اكتب رسالتك هنا..." />
-      <button onclick="sendMessage()">إرسال</button>
+      <button onclick="sendMessage()">📨</button>
+      <button onclick="toggleRecording()">🎤</button>
     </div>
   </div>
+
   <input type="file" id="imageInput" accept="image/*" style="display: none" onchange="sendImage()" />
 
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
   <script>
-    const currentUser = "mahmoud"; // غيّر الاسم حسب الطرف الحالي
+    const currentUser = "mahmoud";
     const otherUser = currentUser === "mahmoud" ? "salma" : "mahmoud";
     const chatPath = "starko/chat";
     const msgInput = document.getElementById("message");
@@ -146,8 +163,6 @@
       };
       database.ref(chatPath).push(messageData);
       msgInput.value = "";
-      updateTyping(false);
-      updateLastSeen();
     }
 
     function sendImage() {
@@ -167,102 +182,124 @@
       reader.readAsDataURL(file);
     }
 
-    function uploadImage() {
+    function toggleRecording() {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        const recorder = new MediaRecorder(stream);
+        const chunks = [];
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: 'audio/ogg; codecs=opus' });
+          const reader = new FileReader();
+          reader.onload = e => {
+            const messageData = {
+              sender: currentUser,
+              audio: e.target.result,
+              timestamp: Date.now(),
+              seen: false,
+              type: "audio"
+            };
+            database.ref(chatPath).push(messageData);
+          };
+          reader.readAsDataURL(blob);
+        };
+        recorder.start();
+        setTimeout(() => recorder.stop(), 5000); // 5 ثواني تسجيل
+      });
+    }
+
+    document.querySelector(".chat-input button").addEventListener("contextmenu", (e) => {
+      e.preventDefault();
       document.getElementById("imageInput").click();
-    }
-
-    database.ref(chatPath).on("child_added", (snapshot) => {
-      const msg = snapshot.val();
-      const msgKey = snapshot.key;
-      const wrapper = document.createElement("div");
-      wrapper.className = msg.sender === currentUser ? "msg mine" : "msg other";
-      wrapper.dataset.key = msgKey;
-
-      if (msg.type === "text") {
-        const bubble = document.createElement("div");
-        bubble.className = "bubble";
-        bubble.textContent = msg.text;
-        wrapper.appendChild(bubble);
-      } else if (msg.type === "image") {
-        const img = document.createElement("img");
-        img.src = msg.image;
-        wrapper.appendChild(img);
-      }
-
-      const status = document.createElement("div");
-      status.className = "status";
-      if (msg.sender === currentUser) {
-        status.textContent = msg.seen ? "✅ تمت القراءة" : "✔️ مرسلة";
-      } else {
-        markAsSeen(msgKey);
-      }
-      wrapper.appendChild(status);
-
-      if (msg.sender === currentUser) {
-        wrapper.addEventListener("contextmenu", (e) => {
-          e.preventDefault();
-          if (confirm("هل تريد حذف هذه الرسالة؟")) {
-            database.ref(`${chatPath}/${msgKey}`).remove();
-            wrapper.remove();
-          }
-        });
-      }
-
-      chatBox.appendChild(wrapper);
-      scrollToBottom();
     });
-
-    function markAsSeen(key) {
-      database.ref(`${chatPath}/${key}`).update({ seen: true });
-    }
 
     function scrollToBottom() {
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    msgInput.addEventListener("input", () => {
-      updateTyping(msgInput.value.trim().length > 0);
-    });
-
-    msgInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") sendMessage();
-    });
-
-    document.querySelector("button").addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      uploadImage();
-    });
-
-    function updateTyping(isTyping) {
-      database.ref(`starko/typing/${currentUser}`).set(isTyping);
+    function markAsSeen(key) {
+      database.ref(`${chatPath}/${key}`).update({ seen: true });
     }
 
-    function updateLastSeen() {
+    database.ref(chatPath).on("value", (snapshot) => {
+      chatBox.innerHTML = "";
+      const messages = [];
+      snapshot.forEach(child => messages.push({ key: child.key, ...child.val() }));
+      messages.sort((a, b) => a.timestamp - b.timestamp);
+      messages.forEach(msg => {
+        const wrapper = document.createElement("div");
+        wrapper.className = msg.sender === currentUser ? "msg mine" : "msg other";
+        wrapper.dataset.key = msg.key;
+
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+
+        if (msg.type === "text") {
+          bubble.textContent = msg.text;
+        } else if (msg.type === "image") {
+          const img = document.createElement("img");
+          img.src = msg.image;
+          img.onclick = () => window.open(msg.image, "_blank");
+          bubble.appendChild(img);
+        } else if (msg.type === "audio") {
+          const audio = document.createElement("audio");
+          audio.controls = true;
+          audio.src = msg.audio;
+          bubble.appendChild(audio);
+        }
+
+        const time = document.createElement("div");
+        time.className = "time";
+        time.textContent = new Date(msg.timestamp).toLocaleTimeString();
+        bubble.appendChild(time);
+
+        wrapper.appendChild(bubble);
+
+        const status = document.createElement("div");
+        status.className = "status";
+        if (msg.sender === currentUser) {
+          status.textContent = msg.seen ? "✅ تمت القراءة" : "✔️ مرسلة";
+        } else {
+          markAsSeen(msg.key);
+        }
+        wrapper.appendChild(status);
+
+        if (msg.sender === currentUser) {
+          wrapper.addEventListener("contextmenu", e => {
+            e.preventDefault();
+            if (confirm("هل تريد حذف هذه الرسالة؟")) {
+              database.ref(`${chatPath}/${msg.key}`).remove();
+              wrapper.remove();
+            }
+          });
+        }
+
+        chatBox.appendChild(wrapper);
+      });
+      scrollToBottom();
+    });
+
+    // تغيير الخلفية
+    document.getElementById("bgColorPicker").addEventListener("input", (e) => {
+      document.body.style.setProperty('--bg-color', e.target.value);
+    });
+
+    // الحالة
+    setInterval(() => {
       database.ref(`starko/lastSeen/${currentUser}`).set(Date.now());
-    }
-
-    setInterval(updateLastSeen, 30000);
+    }, 30000);
 
     database.ref(`starko/lastSeen/${otherUser}`).on("value", (snapshot) => {
-      const time = snapshot.val();
       const status = document.getElementById("header-status");
+      const time = snapshot.val();
       if (!time) return status.textContent = "";
       const now = Date.now();
       if (now - time < 60000) {
         status.textContent = "متصل الآن";
       } else {
-        status.textContent = "آخر ظهور: " + timeAgo(new Date(time));
+        const diff = Math.floor((now - time) / 60000);
+        status.textContent = "آخر ظهور قبل " + (diff < 60 ? diff + " دقيقة" : Math.floor(diff / 60) + " ساعة");
       }
     });
-
-    function timeAgo(date) {
-      const now = new Date();
-      const diff = Math.floor((now - date) / 1000);
-      if (diff < 60) return "الآن";
-      if (diff < 3600) return `${Math.floor(diff / 60)} دقيقة`;
-      if (diff < 86400) return `${Math.floor(diff / 3600)} ساعة`;
-      return `${Math.floor(diff / 86400)} يوم`;
-    }
   </script>
 </body>
 </html>
